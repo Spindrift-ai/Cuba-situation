@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { NewsItem } from "@/data/mockData";
 
 function timeAgo(timestamp: string): string {
@@ -32,6 +33,13 @@ interface NewsFeedProps {
 }
 
 export default function NewsFeed({ items, onSelect }: NewsFeedProps) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const handleClick = (item: NewsItem) => {
+    setExpandedId((prev) => (prev === item.id ? null : item.id));
+    onSelect?.(item);
+  };
+
   return (
     <div className="panel h-full flex flex-col">
       <div className="panel-header">
@@ -42,34 +50,84 @@ export default function NewsFeed({ items, onSelect }: NewsFeedProps) {
         </span>
       </div>
       <div className="panel-body flex-1 overflow-y-auto space-y-2" style={{ maxHeight: "calc(100vh - 400px)" }}>
-        {items.map((item) => (
-          <button
-            key={item.id}
-            className="w-full text-left p-2.5 rounded bg-[var(--bg-secondary)] hover:bg-[var(--bg-panel-hover)] border border-transparent hover:border-[var(--border-bright)] transition-all cursor-pointer"
-            onClick={() => onSelect?.(item)}
-          >
-            <div className="flex items-center gap-2 mb-1">
-              {typeTag(item.type)}
-              <span className="text-[10px] text-[var(--text-muted)]">
-                {item.source}
-              </span>
-              <span className="ml-auto text-[10px] text-[var(--text-muted)]">
-                {timeAgo(item.timestamp)}
-              </span>
-            </div>
-            <div className="text-[12px] font-medium leading-tight text-[var(--text-primary)] mb-1">
-              {item.title}
-            </div>
-            <div className="text-[10px] leading-snug text-[var(--text-secondary)] line-clamp-2">
-              {item.summary}
-            </div>
-            {item.locationLabel && (
-              <div className="mt-1 text-[9px] text-[var(--accent-cyan)]">
-                📍 {item.locationLabel}
+        {items.map((item) => {
+          const isExpanded = expandedId === item.id;
+          return (
+            <button
+              key={item.id}
+              className={`w-full text-left p-2.5 rounded border transition-all cursor-pointer ${
+                isExpanded
+                  ? "bg-[var(--bg-panel-hover)] border-[var(--border-bright)]"
+                  : "bg-[var(--bg-secondary)] border-transparent hover:bg-[var(--bg-panel-hover)] hover:border-[var(--border-bright)]"
+              }`}
+              onClick={() => handleClick(item)}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                {typeTag(item.type)}
+                <span className="text-[10px] text-[var(--text-muted)]">
+                  {item.source}
+                </span>
+                <span className="ml-auto flex items-center gap-1.5">
+                  <span className="text-[10px] text-[var(--text-muted)]">
+                    {timeAgo(item.timestamp)}
+                  </span>
+                  <span
+                    className={`text-[10px] text-[var(--text-muted)] transition-transform ${
+                      isExpanded ? "rotate-180" : ""
+                    }`}
+                  >
+                    ▾
+                  </span>
+                </span>
               </div>
-            )}
-          </button>
-        ))}
+              <div className="text-[12px] font-medium leading-tight text-[var(--text-primary)] mb-1">
+                {item.title}
+              </div>
+
+              {/* Collapsed: truncated summary */}
+              {!isExpanded && (
+                <div className="text-[10px] leading-snug text-[var(--text-secondary)] line-clamp-2">
+                  {item.summary}
+                </div>
+              )}
+
+              {/* Expanded: full content */}
+              {isExpanded && (
+                <div className="mt-2 space-y-2">
+                  <div className="text-[11px] leading-relaxed text-[var(--text-primary)]">
+                    {item.summary}
+                  </div>
+                  <div className="flex items-center gap-3 pt-2 border-t border-[var(--border)]">
+                    {item.locationLabel && (
+                      <span className="text-[9px] text-[var(--accent-cyan)]">
+                        📍 {item.locationLabel}
+                      </span>
+                    )}
+                    <span className="text-[9px] text-[var(--text-muted)]">
+                      {new Date(item.timestamp).toLocaleString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        timeZoneName: "short",
+                      })}
+                    </span>
+                    <span className="text-[9px] text-[var(--accent-blue)] ml-auto">
+                      View source →
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Collapsed location tag */}
+              {!isExpanded && item.locationLabel && (
+                <div className="mt-1 text-[9px] text-[var(--accent-cyan)]">
+                  📍 {item.locationLabel}
+                </div>
+              )}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

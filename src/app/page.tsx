@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import NewsFeed from "@/components/NewsFeed";
 import TrafficPanel from "@/components/TrafficPanel";
 import PowerPanel from "@/components/PowerPanel";
@@ -57,6 +58,12 @@ export default function Dashboard() {
         </div>
         <div className="flex items-center gap-4">
           <MapLayerControls layers={layers} onToggle={toggleLayer} />
+          <Link
+            href="/sources"
+            className="text-[10px] text-[var(--accent-cyan)] hover:underline uppercase tracking-wider"
+          >
+            Sources
+          </Link>
           <span className="text-[10px] text-[var(--text-muted)]">
             {new Date().toLocaleString("en-US", {
               timeZone: "America/Havana",
