@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import ErudaInit from "@/components/ErudaInit";
 
 export const metadata: Metadata = {
   title: "Monitoring la situación",
@@ -20,7 +21,10 @@ export default function RootLayout({
           crossOrigin=""
         />
       </head>
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <ErudaInit />
+        {children}
+      </body>
     </html>
   );
 }

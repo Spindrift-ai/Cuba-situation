@@ -7,11 +7,10 @@ import {
   Marker,
   Popup,
   CircleMarker,
-  Polyline,
   useMap,
 } from "react-leaflet";
 import L from "leaflet";
-import type { NewsItem, Aircraft, Vessel, ProvinceStatus } from "@/data/mockData";
+import type { Aircraft, Vessel, ProvinceStatus } from "@/lib/types";
 
 // Fix default marker icons in Next.js
 const DefaultIcon = L.icon({
@@ -42,10 +41,6 @@ function createSvgIcon(color: string, symbol: string, size: number = 24) {
   });
 }
 
-const newsIcon = createSvgIcon("#3b82f6", "N", 22);
-const tweetIcon = createSvgIcon("#06b6d4", "T", 22);
-const socialIcon = createSvgIcon("#a855f7", "S", 22);
-
 function aircraftIcon(cat: string) {
   const color =
     cat === "military" ? "#ef4444" : cat === "surveillance" ? "#f59e0b" : "#22c55e";
@@ -73,19 +68,16 @@ function powerColor(status: string) {
 }
 
 interface MapLayers {
-  showNews: boolean;
   showAir: boolean;
   showMaritime: boolean;
   showPower: boolean;
 }
 
 interface CubaMapProps {
-  news: NewsItem[];
   aircraft: Aircraft[];
   vessels: Vessel[];
   power: ProvinceStatus[];
   layers: MapLayers;
-  onSelectNews?: (item: NewsItem) => void;
 }
 
 function MapBounds() {
@@ -100,12 +92,10 @@ function MapBounds() {
 }
 
 export default function CubaMap({
-  news,
   aircraft,
   vessels,
   power,
   layers,
-  onSelectNews,
 }: CubaMapProps) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -116,8 +106,6 @@ export default function CubaMap({
       </div>
     );
   }
-
-  const geotaggedNews = news.filter((n) => n.lat && n.lng);
 
   return (
     <MapContainer
@@ -160,36 +148,7 @@ export default function CubaMap({
           </CircleMarker>
         ))}
 
-      {/* News geotags */}
-      {layers.showNews &&
-        geotaggedNews.map((item) => (
-          <Marker
-            key={item.id}
-            position={[item.lat!, item.lng!]}
-            icon={
-              item.type === "tweet"
-                ? tweetIcon
-                : item.type === "social"
-                  ? socialIcon
-                  : newsIcon
-            }
-            eventHandlers={{
-              click: () => onSelectNews?.(item),
-            }}
-          >
-            <Popup>
-              <div style={{ color: "#0a0e17", fontSize: 12, maxWidth: 200 }}>
-                <strong>{item.title}</strong>
-                <br />
-                <span style={{ color: "#64748b" }}>
-                  {item.source} · {item.locationLabel}
-                </span>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
-
-      {/* Aircraft */}
+      {/* Aircraft from OpenSky */}
       {layers.showAir &&
         aircraft.map((ac) => (
           <Marker
@@ -199,17 +158,22 @@ export default function CubaMap({
           >
             <Popup>
               <div style={{ color: "#0a0e17", fontSize: 12 }}>
-                <strong>{ac.callsign}</strong> ({ac.type})
+                <strong>{ac.callsign || ac.icao24}</strong>
                 <br />
-                {ac.origin} → {ac.destination}
+                {ac.originCountry}
                 <br />
-                Alt: {ac.altitude.toLocaleString()} ft · {ac.speed} kts · HDG {ac.heading}°
+                {ac.altitude != null ? `${ac.altitude.toLocaleString()} ft` : "—"}
+                {ac.speed != null ? ` · ${ac.speed} kts` : ""}
+                {ac.heading != null ? ` · HDG ${ac.heading}°` : ""}
+                {ac.squawk ? <><br />Squawk: {ac.squawk}</> : null}
+                <br />
+                <em style={{ color: "#64748b", fontSize: 10 }}>Source: OpenSky Network</em>
               </div>
             </Popup>
           </Marker>
         ))}
 
-      {/* Vessels */}
+      {/* Vessels from AISstream */}
       {layers.showMaritime &&
         vessels.map((v) => (
           <Marker
@@ -223,7 +187,10 @@ export default function CubaMap({
                 <br />
                 {v.type} · {v.flag}
                 <br />
-                {v.speed} kts · HDG {v.heading}°
+                {v.speed != null ? `${v.speed} kts` : "—"}
+                {v.heading != null ? ` · HDG ${v.heading}°` : ""}
+                <br />
+                <em style={{ color: "#64748b", fontSize: 10 }}>Source: AISstream.io</em>
               </div>
             </Popup>
           </Marker>

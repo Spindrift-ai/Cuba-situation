@@ -1,7 +1,6 @@
 "use client";
 
 interface MapLayers {
-  showNews: boolean;
   showAir: boolean;
   showMaritime: boolean;
   showPower: boolean;
@@ -48,12 +47,6 @@ export default function MapLayerControls({
 }: MapLayerControlsProps) {
   return (
     <div className="flex gap-1.5 flex-wrap">
-      <Toggle
-        label="Intel"
-        color="#3b82f6"
-        active={layers.showNews}
-        onToggle={() => onToggle("showNews")}
-      />
       <Toggle
         label="Air"
         color="#22c55e"

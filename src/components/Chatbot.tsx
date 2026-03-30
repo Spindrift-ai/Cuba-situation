@@ -6,8 +6,8 @@ import type {
   Aircraft,
   Vessel,
   ProvinceStatus,
-  PolymarketPoint,
-} from "@/data/mockData";
+  PolymarketMarket,
+} from "@/lib/types";
 
 interface Message {
   role: "user" | "assistant";
@@ -19,73 +19,119 @@ interface ChatbotProps {
   aircraft: Aircraft[];
   vessels: Vessel[];
   power: ProvinceStatus[];
-  polymarket: PolymarketPoint[];
+  markets: PolymarketMarket[];
 }
 
 function buildContext(props: ChatbotProps): string {
-  const blackouts = props.power.filter((p) => p.status === "blackout");
-  const partials = props.power.filter((p) => p.status === "partial");
-  const milAircraft = props.aircraft.filter((a) => a.category !== "civilian");
-  const milVessels = props.vessels.filter((v) => v.category === "military");
-  const latest = props.polymarket[props.polymarket.length - 1];
+  const newsSection =
+    props.news.length > 0
+      ? `NEWS (${props.news.length} live articles from GDELT):\n${props.news.slice(0, 10).map((n) => `- ${n.source}: ${n.title}`).join("\n")}`
+      : "NEWS: No articles currently loaded.";
 
-  return `You are a Cuba situation analyst. Here is the current dashboard state:
+  const aircraftSection =
+    props.aircraft.length > 0
+      ? `AIR TRAFFIC (${props.aircraft.length} aircraft from OpenSky Network):\n${props.aircraft.slice(0, 10).map((a) => `- ${a.callsign || a.icao24} (${a.originCountry}) ${a.category} ${a.altitude ? a.altitude + "ft" : "ground"}`).join("\n")}`
+      : "AIR TRAFFIC: No aircraft currently detected in Cuba airspace via OpenSky.";
 
-NEWS (${props.news.length} items):
-${props.news.map((n) => `- [${n.type}] ${n.source}: ${n.title}`).join("\n")}
+  const vesselSection =
+    props.vessels.length > 0
+      ? `MARITIME (${props.vessels.length} vessels from AISstream):\n${props.vessels.slice(0, 10).map((v) => `- ${v.name} (${v.type}, ${v.flag}) ${v.category}`).join("\n")}`
+      : "MARITIME: No vessel data available (API key may be required).";
 
-POWER GRID:
-- ${blackouts.length} provinces in blackout: ${blackouts.map((p) => p.province).join(", ")}
-- ${partials.length} provinces with partial power: ${partials.map((p) => p.province).join(", ")}
+  const powerSection =
+    props.power.length > 0
+      ? `POWER GRID:\n${props.power.map((p) => `- ${p.province}: ${p.status} (${p.loadMW}/${p.capacityMW} MW)`).join("\n")}`
+      : "POWER GRID: No data available (requires custom scraper).";
 
-AIR TRAFFIC (${props.aircraft.length} tracked):
-${milAircraft.map((a) => `- ${a.callsign} (${a.type}) - ${a.category} - ${a.origin}→${a.destination}`).join("\n")}
+  const marketSection =
+    props.markets.length > 0
+      ? `POLYMARKET:\n${props.markets.map((m) => `- "${m.question}" at ${m.probability}% (Vol: $${Number(m.volume).toLocaleString()})`).join("\n")}`
+      : "POLYMARKET: No active Cuba-related prediction markets found.";
 
-MARITIME (${props.vessels.length} tracked):
-${milVessels.map((v) => `- ${v.name} (${v.type}, ${v.flag}) - ${v.category}`).join("\n")}
+  return `You are a Cuba situation analyst. Here is the LIVE dashboard state (all data from real APIs):
 
-POLYMARKET: Cuba regime change 2026 at ${latest.probability}% ($${(latest.volume / 1000).toFixed(0)}k volume)
+${newsSection}
 
-Answer concisely based on this data. If asked about something not in the data, say what you know and note the limitation.`;
+${aircraftSection}
+
+${vesselSection}
+
+${powerSection}
+
+${marketSection}
+
+Answer concisely based ONLY on the data shown above. If a data source is unavailable, say so honestly. Do not fabricate information.`;
 }
 
-// Simple local response generator (no API needed)
-function generateResponse(query: string, context: string): string {
+function generateResponse(query: string, props: ChatbotProps): string {
   const q = query.toLowerCase();
+  const context = buildContext(props);
 
-  if (q.includes("blackout") || q.includes("power") || q.includes("electricity") || q.includes("grid")) {
-    return "Based on current monitoring, 4 provinces are experiencing full blackouts: Matanzas, Camagüey, Holguín, and Santiago de Cuba. Another 6 provinces have partial power with rolling outages. Total national grid load is at approximately 37% of capacity. Santiago de Cuba has seen protests related to 48+ hours without electricity. The national utility UNE has published rolling blackout schedules affecting all 15 provinces with 8-12 hour daily outages expected.";
+  if (q.includes("summary") || q.includes("overview") || q.includes("situation") || q.includes("what's happening") || q.includes("brief")) {
+    const parts: string[] = [];
+    if (props.news.length > 0) {
+      parts.push(`**News**: ${props.news.length} live articles from GDELT. Top story: "${props.news[0]?.title}"`);
+    } else {
+      parts.push("**News**: No articles currently loaded from GDELT.");
+    }
+    if (props.aircraft.length > 0) {
+      const mil = props.aircraft.filter(a => a.category !== "civilian");
+      parts.push(`**Air Traffic**: ${props.aircraft.length} aircraft tracked via OpenSky (${mil.length} military/surveillance).`);
+    } else {
+      parts.push("**Air Traffic**: No aircraft detected via OpenSky. Coverage may be limited over Cuba.");
+    }
+    if (props.vessels.length > 0) {
+      parts.push(`**Maritime**: ${props.vessels.length} vessels tracked via AISstream.`);
+    } else {
+      parts.push("**Maritime**: No vessel data — AISstream API key may not be configured.");
+    }
+    if (props.power.length > 0) {
+      const blackouts = props.power.filter(p => p.status === "blackout").length;
+      parts.push(`**Power Grid**: ${blackouts} provinces in blackout.`);
+    } else {
+      parts.push("**Power Grid**: No data — requires custom scraper (no public API exists).");
+    }
+    if (props.markets.length > 0) {
+      parts.push(`**Polymarket**: ${props.markets.length} active Cuba market(s). Top: "${props.markets[0]?.question}" at ${props.markets[0]?.probability}%.`);
+    } else {
+      parts.push("**Polymarket**: No active Cuba prediction markets found.");
+    }
+    return parts.join("\n\n");
   }
 
-  if (q.includes("military") || q.includes("russia") || q.includes("naval") || q.includes("ship")) {
-    return "Two Russian naval vessels are currently docked in Havana harbor: the frigate Admiral Gorshkov and the replenishment oiler Akademik Pashin, described as a 'goodwill visit.' On the US side, USCGC Stone (Coast Guard cutter) is positioned in the Florida Straits. Additionally, a US P-8A Poseidon maritime patrol aircraft (callsign EPIC21) and an RC-135V reconnaissance aircraft (callsign COBRA11) are conducting patrol operations in the area.";
+  if (q.includes("news") || q.includes("article") || q.includes("headline")) {
+    if (props.news.length === 0) return "No news articles are currently loaded from GDELT. Try refreshing the page.";
+    return `Currently showing ${props.news.length} articles from GDELT about Cuba. Recent headlines:\n\n${props.news.slice(0, 5).map((n) => `- **${n.title}** (${n.source})`).join("\n")}`;
   }
 
-  if (q.includes("polymarket") || q.includes("regime") || q.includes("prediction") || q.includes("bet")) {
-    return "The Polymarket prediction market for 'Cuba Regime Change in 2026' currently sits at 26% probability with $290k in trading volume. This has risen sharply from 3% at the start of January, with the steepest increases in March correlating with the power grid crisis and protest activity. The market saw a brief dip to 19% around March 25 before rebounding to current levels.";
+  if (q.includes("flight") || q.includes("aircraft") || q.includes("air") || q.includes("plane")) {
+    if (props.aircraft.length === 0) return "No aircraft currently detected in Cuba airspace via OpenSky Network. Coverage can be limited in this region due to fewer ground receivers.";
+    const mil = props.aircraft.filter(a => a.category !== "civilian");
+    return `Tracking ${props.aircraft.length} aircraft via OpenSky Network (${mil.length} military/surveillance, ${props.aircraft.length - mil.length} civilian).\n\n${props.aircraft.slice(0, 5).map((a) => `- **${a.callsign || a.icao24}** (${a.originCountry}) — ${a.category} — ${a.altitude ? a.altitude.toLocaleString() + "ft" : "ground"}`).join("\n")}`;
   }
 
-  if (q.includes("protest") || q.includes("unrest") || q.includes("santiago")) {
-    return "Protests have been reported in Santiago de Cuba following 48+ hours without electricity. Security forces have reportedly been deployed to main intersections. Additionally, an unusual military convoy was spotted near Camagüey moving eastward on the central highway, with unconfirmed reports suggesting troop redeployments. The combination of power outages, food shortages, and military movements suggests elevated internal tensions.";
+  if (q.includes("ship") || q.includes("vessel") || q.includes("maritime") || q.includes("navy") || q.includes("boat")) {
+    if (props.vessels.length === 0) return "No maritime data available. The AISstream.io API key may not be configured. Set AISSTREAM_API_KEY in .env.local to enable vessel tracking.";
+    return `Tracking ${props.vessels.length} vessels via AISstream:\n\n${props.vessels.slice(0, 5).map((v) => `- **${v.name}** (${v.type}, ${v.flag}) — ${v.category}`).join("\n")}`;
   }
 
-  if (q.includes("flight") || q.includes("aircraft") || q.includes("air")) {
-    return "Currently tracking 5 aircraft in the Cuba area: A Russian Il-96 (RFF7012) inbound from Moscow to Havana, a Cuban AN-158 on a Havana-Cancún route, a US Navy P-8A Poseidon (EPIC21) on maritime patrol from NAS Jacksonville, an American Airlines B737-800 on the Miami-Havana route, and a US Air Force RC-135V (COBRA11) reconnaissance aircraft on patrol from Offutt AFB. The military/surveillance aircraft suggest heightened US intelligence interest in the region.";
+  if (q.includes("power") || q.includes("blackout") || q.includes("electric") || q.includes("grid")) {
+    if (props.power.length === 0) return "No power grid data available. Cuba's UNE does not provide a public API. Data requires a custom scraper monitoring UNE's website or social media. Set CUBA_POWER_SCRAPER_URL in .env.local to connect one.";
+    const blackouts = props.power.filter(p => p.status === "blackout");
+    return `Power grid data from scraper:\n\n- ${blackouts.length} provinces in blackout: ${blackouts.map(p => p.province).join(", ") || "None"}\n- Total load: ${props.power.reduce((s, p) => s + p.loadMW, 0)} / ${props.power.reduce((s, p) => s + p.capacityMW, 0)} MW`;
   }
 
-  if (q.includes("summary") || q.includes("overview") || q.includes("situation") || q.includes("what's happening")) {
-    return "Current Cuba situation summary:\n\n• POWER CRISIS: 4 of 16 provinces in full blackout (Matanzas, Camagüey, Holguín, Santiago de Cuba), 6 more with partial power. Grid at ~37% capacity.\n\n• UNREST: Protests in Santiago de Cuba over power cuts. Military convoy spotted near Camagüey suggesting troop movements.\n\n• GEOPOLITICS: Russian naval vessels (frigate + oiler) docked in Havana. US surveillance aircraft actively patrolling. China offering $100M credit line for fuel.\n\n• ECONOMY: Worst economic crisis in decades with deepening food shortages. Cuban migrants intercepted in Florida Straits.\n\n• PREDICTION MARKETS: Regime change probability at 26% on Polymarket, up from 3% in January.\n\nThe convergence of infrastructure collapse, social unrest, and great-power military positioning suggests an elevated risk environment.";
+  if (q.includes("polymarket") || q.includes("prediction") || q.includes("bet") || q.includes("regime")) {
+    if (props.markets.length === 0) return "No active Cuba-related prediction markets found on Polymarket. Markets are user-created and may not exist for every topic at all times. Data is fetched live from the Polymarket Gamma API.";
+    return `Active Cuba markets on Polymarket:\n\n${props.markets.map((m) => `- **${m.question}** — ${m.probability}% probability (Vol: $${Number(m.volume).toLocaleString()})\n  [View on Polymarket](${m.url})`).join("\n\n")}`;
   }
 
-  if (q.includes("china") || q.includes("fuel") || q.includes("economic")) {
-    return "China has extended a $100M credit line to Cuba for emergency fuel purchases, signaling deepening economic ties. This comes amid Cuba's worst economic crisis in decades, with widespread food shortages and insufficient fuel supplies to maintain the power grid. Venezuela has also been supplying fuel via tanker (the Pegas is currently en route). The economic situation is compounded by tightening sanctions and dwindling foreign reserves.";
+  if (q.includes("source") || q.includes("where") || q.includes("data from") || q.includes("api")) {
+    return "Dashboard data sources:\n\n- **News**: GDELT Project (api.gdeltproject.org) — free, no auth\n- **Air Traffic**: OpenSky Network (opensky-network.org) — free, no auth\n- **Maritime**: AISstream.io — free API key required\n- **Power Grid**: No public API — requires custom scraper\n- **Polymarket**: Gamma API (gamma-api.polymarket.com) — free, no auth\n\nAll data refreshes on each page load. Visit the /sources page for full details.";
   }
 
-  if (q.includes("migrant") || q.includes("refugee") || q.includes("coast guard") || q.includes("florida")) {
-    return "The US Coast Guard recently intercepted a makeshift raft carrying 23 Cuban migrants approximately 40 miles south of Key West. The migrants reported deteriorating conditions on the island. The USCGC Stone is currently operating in the Florida Straits. Continued economic deterioration and power outages are likely driving increased migration attempts.";
-  }
-
-  return "Based on the current dashboard data, the Cuba situation involves multiple converging crises: widespread power blackouts affecting 4 provinces, an economic crisis with food shortages, Russian naval presence in Havana, US surveillance aircraft activity, protests in Santiago de Cuba, and prediction markets pricing regime change risk at 26%. Could you ask about a specific aspect — power grid, military activity, protests, economics, or predictions?";
+  // Default: summarize what's available
+  return `I have access to live dashboard data. Currently loaded:\n\n- ${props.news.length} news articles (GDELT)\n- ${props.aircraft.length} aircraft (OpenSky)\n- ${props.vessels.length} vessels (AISstream)\n- ${props.power.length} power grid entries\n- ${props.markets.length} prediction markets (Polymarket)\n\nAsk me about any of these — news, flights, ships, power, predictions, or a full situation summary.`;
 }
 
 export default function Chatbot(props: ChatbotProps) {
@@ -93,7 +139,7 @@ export default function Chatbot(props: ChatbotProps) {
     {
       role: "assistant",
       content:
-        "Situation analyst online. I have access to the current dashboard data including news, power grid status, air/maritime traffic, and prediction markets. What would you like to know about the Cuba situation?",
+        "Situation analyst online. I have access to live dashboard data from GDELT, OpenSky, AISstream, and Polymarket. What would you like to know?",
     },
   ]);
   const [input, setInput] = useState("");
@@ -113,13 +159,11 @@ export default function Chatbot(props: ChatbotProps) {
     setInput("");
     setIsTyping(true);
 
-    // Simulate response delay
     setTimeout(() => {
-      const context = buildContext(props);
-      const response = generateResponse(userMsg.content, context);
+      const response = generateResponse(userMsg.content, props);
       setMessages((prev) => [...prev, { role: "assistant", content: response }]);
       setIsTyping(false);
-    }, 800);
+    }, 400);
   };
 
   return (
@@ -128,7 +172,7 @@ export default function Chatbot(props: ChatbotProps) {
         <span className="inline-block w-2 h-2 rounded-full bg-[var(--accent-cyan)] pulse-dot" />
         Situation Analyst
         <span className="ml-auto text-[var(--text-muted)] text-[10px] font-normal normal-case tracking-normal">
-          AI
+          LIVE DATA
         </span>
       </div>
 
@@ -157,7 +201,7 @@ export default function Chatbot(props: ChatbotProps) {
         {isTyping && (
           <div className="flex justify-start">
             <div className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-3 py-2 text-[11px] text-[var(--text-muted)]">
-              Analyzing situation data…
+              Analyzing live data…
             </div>
           </div>
         )}
