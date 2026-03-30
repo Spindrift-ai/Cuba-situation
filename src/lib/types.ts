@@ -98,12 +98,24 @@ export interface MaritimeResponse {
   fetchedAt: string;
 }
 
+export interface PowerReport {
+  id: string;
+  title: string;
+  source: string;
+  url: string;
+  timestamp: string;
+  language: string | null;
+}
+
 export interface PowerResponse {
+  reports: PowerReport[];
   provinces: ProvinceStatus[];
+  scraperConfigured: boolean;
+  scraperError?: string | null;
   configRequired: boolean;
-  message?: string;
   error?: string;
   fetchedAt: string;
+  source?: string;
 }
 
 export interface PolymarketResponse {

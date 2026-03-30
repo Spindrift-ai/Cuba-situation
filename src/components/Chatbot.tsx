@@ -5,7 +5,7 @@ import type {
   NewsItem,
   Aircraft,
   Vessel,
-  ProvinceStatus,
+  PowerReport,
   PolymarketMarket,
 } from "@/lib/types";
 
@@ -18,7 +18,7 @@ interface ChatbotProps {
   news: NewsItem[];
   aircraft: Aircraft[];
   vessels: Vessel[];
-  power: ProvinceStatus[];
+  powerReports: PowerReport[];
   markets: PolymarketMarket[];
 }
 
@@ -39,9 +39,9 @@ function buildContext(props: ChatbotProps): string {
       : "MARITIME: No vessel data available (API key may be required).";
 
   const powerSection =
-    props.power.length > 0
-      ? `POWER GRID:\n${props.power.map((p) => `- ${p.province}: ${p.status} (${p.loadMW}/${p.capacityMW} MW)`).join("\n")}`
-      : "POWER GRID: No data available (requires custom scraper).";
+    props.powerReports.length > 0
+      ? `POWER OUTAGE REPORTS (${props.powerReports.length} from GDELT news):\n${props.powerReports.slice(0, 10).map((r) => `- ${r.source}: ${r.title}`).join("\n")}`
+      : "POWER OUTAGE REPORTS: No recent outage news found.";
 
   const marketSection =
     props.markets.length > 0
@@ -85,11 +85,10 @@ function generateResponse(query: string, props: ChatbotProps): string {
     } else {
       parts.push("**Maritime**: No vessel data — AISstream API key may not be configured.");
     }
-    if (props.power.length > 0) {
-      const blackouts = props.power.filter(p => p.status === "blackout").length;
-      parts.push(`**Power Grid**: ${blackouts} provinces in blackout.`);
+    if (props.powerReports.length > 0) {
+      parts.push(`**Power Outages**: ${props.powerReports.length} outage reports from news sources. Latest: "${props.powerReports[0]?.title}"`);
     } else {
-      parts.push("**Power Grid**: No data — requires custom scraper (no public API exists).");
+      parts.push("**Power Outages**: No recent outage reports found in news sources.");
     }
     if (props.markets.length > 0) {
       parts.push(`**Polymarket**: ${props.markets.length} active Cuba market(s). Top: "${props.markets[0]?.question}" at ${props.markets[0]?.probability}%.`);
@@ -116,9 +115,8 @@ function generateResponse(query: string, props: ChatbotProps): string {
   }
 
   if (q.includes("power") || q.includes("blackout") || q.includes("electric") || q.includes("grid")) {
-    if (props.power.length === 0) return "No power grid data available. Cuba's UNE does not provide a public API. Data requires a custom scraper monitoring UNE's website or social media. Set CUBA_POWER_SCRAPER_URL in .env.local to connect one.";
-    const blackouts = props.power.filter(p => p.status === "blackout");
-    return `Power grid data from scraper:\n\n- ${blackouts.length} provinces in blackout: ${blackouts.map(p => p.province).join(", ") || "None"}\n- Total load: ${props.power.reduce((s, p) => s + p.loadMW, 0)} / ${props.power.reduce((s, p) => s + p.capacityMW, 0)} MW`;
+    if (props.powerReports.length === 0) return "No recent power outage reports found. GDELT searches for 'apagón cuba', 'blackout cuba', and 'power outage cuba' but found no recent articles. This doesn't necessarily mean there are no outages — it means no news coverage was found.";
+    return `${props.powerReports.length} power outage reports from news sources:\n\n${props.powerReports.slice(0, 5).map((r) => `- **${r.title}** (${r.source})`).join("\n")}\n\nNote: No public API exists for Cuba's actual grid status. These are news reports, not real-time grid data.`;
   }
 
   if (q.includes("polymarket") || q.includes("prediction") || q.includes("bet") || q.includes("regime")) {
@@ -131,7 +129,7 @@ function generateResponse(query: string, props: ChatbotProps): string {
   }
 
   // Default: summarize what's available
-  return `I have access to live dashboard data. Currently loaded:\n\n- ${props.news.length} news articles (GDELT)\n- ${props.aircraft.length} aircraft (OpenSky)\n- ${props.vessels.length} vessels (AISstream)\n- ${props.power.length} power grid entries\n- ${props.markets.length} prediction markets (Polymarket)\n\nAsk me about any of these — news, flights, ships, power, predictions, or a full situation summary.`;
+  return `I have access to live dashboard data. Currently loaded:\n\n- ${props.news.length} news articles (GDELT)\n- ${props.aircraft.length} aircraft (OpenSky)\n- ${props.vessels.length} vessels (AISstream)\n- ${props.powerReports.length} power outage reports (GDELT)\n- ${props.markets.length} prediction markets (Polymarket)\n\nAsk me about any of these — news, flights, ships, power, predictions, or a full situation summary.`;
 }
 
 export default function Chatbot(props: ChatbotProps) {

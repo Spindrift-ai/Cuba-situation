@@ -1,82 +1,75 @@
 "use client";
 
-import type { ProvinceStatus } from "@/lib/types";
-import { LoadingState, ErrorState, ConfigRequired, FetchTimestamp } from "./StatusBar";
+import { useState } from "react";
+import type { ProvinceStatus, PowerReport } from "@/lib/types";
+import { LoadingState, ErrorState, EmptyState, FetchTimestamp } from "./StatusBar";
 
-function statusDot(status: ProvinceStatus["status"]) {
-  const color =
-    status === "online"
-      ? "bg-green-500"
-      : status === "partial"
-        ? "bg-amber-500"
-        : "bg-red-500";
-  return (
-    <span
-      className={`inline-block w-2 h-2 rounded-full ${color} ${status === "blackout" ? "pulse-dot" : ""}`}
-    />
-  );
-}
-
-function statusLabel(status: ProvinceStatus["status"]) {
-  const styles =
-    status === "online"
-      ? "text-green-400"
-      : status === "partial"
-        ? "text-amber-400"
-        : "text-red-400";
-  return (
-    <span className={`text-[9px] font-bold uppercase ${styles}`}>{status}</span>
-  );
+function timeAgo(timestamp: string): string {
+  const diff = Date.now() - new Date(timestamp).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
 }
 
 interface PowerPanelProps {
-  data: ProvinceStatus[];
+  reports: PowerReport[];
+  provinces: ProvinceStatus[];
   loading: boolean;
   error: string | null;
   fetchedAt: string | null;
-  configRequired: boolean;
-  configMessage?: string;
+  scraperConfigured: boolean;
+  source?: string;
 }
 
 export default function PowerPanel({
-  data,
+  reports,
+  provinces,
   loading,
   error,
   fetchedAt,
-  configRequired,
-  configMessage,
+  scraperConfigured,
+  source,
 }: PowerPanelProps) {
-  const totalLoad = data.reduce((s, p) => s + p.loadMW, 0);
-  const totalCapacity = data.reduce((s, p) => s + p.capacityMW, 0);
-  const blackoutCount = data.filter((p) => p.status === "blackout").length;
-  const partialCount = data.filter((p) => p.status === "partial").length;
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const hasProvinces = provinces.length > 0;
+  const hasReports = reports.length > 0;
+
+  const totalLoad = provinces.reduce((s, p) => s + p.loadMW, 0);
+  const totalCapacity = provinces.reduce((s, p) => s + p.capacityMW, 0);
+  const blackoutCount = provinces.filter((p) => p.status === "blackout").length;
+  const partialCount = provinces.filter((p) => p.status === "partial").length;
 
   return (
     <div className="panel h-full flex flex-col">
       <div className="panel-header">
         <span className="inline-block w-2 h-2 rounded-full bg-[var(--accent-red)] pulse-dot" />
-        Power Grid Status
-        <span className="ml-auto">
+        Power Grid / Outage Reports
+        <span className="ml-auto flex items-center gap-2">
           <FetchTimestamp fetchedAt={fetchedAt} />
+          {hasReports && (
+            <span className="text-[var(--text-muted)] text-[10px] font-normal normal-case tracking-normal">
+              {reports.length} reports
+            </span>
+          )}
         </span>
       </div>
       <div className="panel-body flex-1 overflow-y-auto">
         {loading && <LoadingState />}
-        {!loading && configRequired && (
-          <ConfigRequired
-            message={
-              configMessage ||
-              "No public API exists for Cuba's power grid. Real-time data requires a custom scraper " +
-              "monitoring UNE (https://www.une.cu) or social media reports. " +
-              "Set CUBA_POWER_SCRAPER_URL in .env.local to connect a scraper endpoint."
-            }
-          />
-        )}
-        {!loading && !configRequired && error && <ErrorState message={error} />}
+        {!loading && error && <ErrorState message={error} />}
 
-        {!loading && !configRequired && data.length > 0 && (
+        {/* Source attribution */}
+        {!loading && source && (
+          <div className="text-[9px] text-[var(--text-muted)] mb-2 px-1">
+            Source: {source}
+          </div>
+        )}
+
+        {/* Province-level data (from custom scraper, if configured) */}
+        {!loading && hasProvinces && (
           <>
-            {/* Summary bar */}
             <div className="flex gap-3 mb-3 text-[10px]">
               <div className="flex-1 p-2 rounded bg-[var(--bg-secondary)] text-center">
                 <div className="text-[var(--text-muted)]">Grid Load</div>
@@ -99,18 +92,35 @@ export default function PowerPanel({
               </div>
             </div>
 
-            {/* Province list */}
-            <div className="space-y-1">
-              {data.map((p) => (
+            <div className="space-y-1 mb-4">
+              {provinces.map((p) => (
                 <div
                   key={p.province}
                   className="flex items-center gap-2 p-1.5 rounded hover:bg-[var(--bg-secondary)] text-[11px]"
                 >
-                  {statusDot(p.status)}
+                  <span
+                    className={`inline-block w-2 h-2 rounded-full ${
+                      p.status === "online"
+                        ? "bg-green-500"
+                        : p.status === "partial"
+                          ? "bg-amber-500"
+                          : "bg-red-500"
+                    } ${p.status === "blackout" ? "pulse-dot" : ""}`}
+                  />
                   <span className="flex-1 text-[var(--text-primary)] truncate">
                     {p.province}
                   </span>
-                  {statusLabel(p.status)}
+                  <span
+                    className={`text-[9px] font-bold uppercase ${
+                      p.status === "online"
+                        ? "text-green-400"
+                        : p.status === "partial"
+                          ? "text-amber-400"
+                          : "text-red-400"
+                    }`}
+                  >
+                    {p.status}
+                  </span>
                   <span className="text-[var(--text-muted)] text-[10px] w-20 text-right">
                     {p.loadMW}/{p.capacityMW} MW
                   </span>
@@ -118,6 +128,101 @@ export default function PowerPanel({
               ))}
             </div>
           </>
+        )}
+
+        {/* Scraper setup hint if no province data */}
+        {!loading && !hasProvinces && (
+          <div className="p-3 mb-3 rounded bg-[var(--bg-secondary)] border border-[var(--border)] text-[10px] text-[var(--text-muted)] leading-relaxed">
+            <span className="text-amber-400 font-bold">Province-level grid data</span>{" "}
+            requires a custom scraper (no public API exists for UNE).
+            {!scraperConfigured && (
+              <>
+                {" "}Set <code className="bg-[var(--bg-primary)] px-1 rounded">CUBA_POWER_SCRAPER_URL</code> in{" "}
+                <code className="bg-[var(--bg-primary)] px-1 rounded">.env.local</code> to enable.
+              </>
+            )}
+          </div>
+        )}
+
+        {/* GDELT power outage news reports (always available) */}
+        {!loading && hasReports && (
+          <div>
+            <div className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-2">
+              Outage Reports from News Sources
+            </div>
+            <div className="space-y-1.5">
+              {reports.map((r) => {
+                const isExpanded = expandedId === r.id;
+                return (
+                  <div
+                    key={r.id}
+                    className={`w-full text-left p-2.5 rounded border transition-all cursor-pointer ${
+                      isExpanded
+                        ? "bg-[var(--bg-panel-hover)] border-[var(--border-bright)]"
+                        : "bg-[var(--bg-secondary)] border-transparent hover:bg-[var(--bg-panel-hover)] hover:border-[var(--border-bright)]"
+                    }`}
+                    onClick={() => setExpandedId(isExpanded ? null : r.id)}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-red-500/20 text-red-400">
+                        OUTAGE
+                      </span>
+                      <span className="text-[10px] text-[var(--text-muted)] truncate max-w-[140px]">
+                        {r.source}
+                      </span>
+                      <span className="ml-auto flex items-center gap-1.5">
+                        <span className="text-[10px] text-[var(--text-muted)]">
+                          {timeAgo(r.timestamp)}
+                        </span>
+                        <span
+                          className={`text-[10px] text-[var(--text-muted)] transition-transform ${
+                            isExpanded ? "rotate-180" : ""
+                          }`}
+                        >
+                          ▾
+                        </span>
+                      </span>
+                    </div>
+                    <div className="text-[12px] font-medium leading-tight text-[var(--text-primary)]">
+                      {r.title}
+                    </div>
+
+                    {isExpanded && (
+                      <div className="mt-2 pt-2 border-t border-[var(--border)] flex items-center gap-3">
+                        <span className="text-[9px] text-[var(--text-muted)]">
+                          {new Date(r.timestamp).toLocaleString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            timeZoneName: "short",
+                          })}
+                        </span>
+                        {r.language && (
+                          <span className="text-[9px] text-[var(--text-muted)] uppercase">
+                            {r.language}
+                          </span>
+                        )}
+                        <a
+                          href={r.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[9px] text-[var(--accent-cyan)] hover:underline ml-auto"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Read full article →
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {!loading && !hasReports && !hasProvinces && !error && (
+          <EmptyState message="No power outage reports found at this time." />
         )}
       </div>
     </div>

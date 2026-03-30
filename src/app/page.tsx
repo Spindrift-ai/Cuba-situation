@@ -43,6 +43,7 @@ export default function Dashboard() {
   const aircraft = aircraftFeed.data?.aircraft || [];
   const vessels = maritimeFeed.data?.vessels || [];
   const powerData = powerFeed.data?.provinces || [];
+  const powerReports = powerFeed.data?.reports || [];
   const markets = polymarketFeed.data?.markets || [];
 
   const toggleLayer = (layer: keyof typeof layers) => {
@@ -167,12 +168,13 @@ export default function Dashboard() {
             </div>
             <div className={activeTab === "power" ? "h-full" : "hidden"}>
               <PowerPanel
-                data={powerData}
+                reports={powerReports}
+                provinces={powerData}
                 loading={powerFeed.loading}
                 error={powerFeed.error}
                 fetchedAt={powerFeed.fetchedAt}
-                configRequired={powerFeed.data?.configRequired || false}
-                configMessage={powerFeed.data?.message}
+                scraperConfigured={powerFeed.data?.scraperConfigured || false}
+                source={powerFeed.data?.source}
               />
             </div>
             <div className={activeTab === "polymarket" ? "h-full" : "hidden"}>
@@ -189,7 +191,7 @@ export default function Dashboard() {
                 news={newsItems}
                 aircraft={aircraft}
                 vessels={vessels}
-                power={powerData}
+                powerReports={powerReports}
                 markets={markets}
               />
             </div>
