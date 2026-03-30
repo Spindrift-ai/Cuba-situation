@@ -178,7 +178,6 @@ export default function Chatbot(props: ChatbotProps) {
       <div
         ref={scrollRef}
         className="flex-1 overflow-y-auto p-3 space-y-3"
-        style={{ maxHeight: "calc(100vh - 400px)" }}
       >
         {messages.map((msg, i) => (
           <div

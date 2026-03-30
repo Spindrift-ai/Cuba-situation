@@ -31,6 +31,8 @@ body {
     monospace;
   overflow: hidden;
   height: 100vh;
+  height: 100dvh; /* mobile-safe viewport height */
+  -webkit-text-size-adjust: 100%;
 }
 
 /* Scrollbar */

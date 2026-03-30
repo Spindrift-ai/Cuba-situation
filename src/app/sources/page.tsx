@@ -30,7 +30,7 @@ export default function SourcesPage() {
   const categories = [...new Set(dataSources.map((s) => s.category))];
 
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
+    <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] overflow-y-auto" style={{ height: "100vh" }}>
       {/* Header */}
       <header className="border-b border-[var(--border)] bg-[var(--bg-secondary)] px-6 py-4">
         <div className="flex items-center justify-between max-w-5xl mx-auto">
@@ -103,7 +103,7 @@ export default function SourcesPage() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3 text-[10px]">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[10px]">
                         <div>
                           <span className="text-[var(--text-muted)] uppercase tracking-wider">
                             Docs / URL

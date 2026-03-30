@@ -49,7 +49,7 @@ export default function NewsFeed({ items, loading, error, fetchedAt, onSelect }:
       )}
 
       {!loading && items.length > 0 && (
-        <div className="panel-body flex-1 overflow-y-auto space-y-2" style={{ maxHeight: "calc(100vh - 400px)" }}>
+        <div className="panel-body flex-1 overflow-y-auto space-y-2">
           {items.map((item) => {
             const isExpanded = expandedId === item.id;
             return (
