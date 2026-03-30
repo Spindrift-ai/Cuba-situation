@@ -56,6 +56,8 @@ export interface PolymarketMarket {
   id: string;
   question: string;
   slug: string;
+  eventSlug: string;
+  eventTitle: string;
   probability: number | null;
   volume: string;
   active: boolean;
@@ -63,6 +65,7 @@ export interface PolymarketMarket {
   endDate: string;
   description: string;
   url: string;
+  groupItemTitle: string;
 }
 
 export interface PolymarketEvent {
