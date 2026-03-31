@@ -63,8 +63,12 @@ export default function NewsFeed({ items, loading, error, fetchedAt, onSelect }:
                 onClick={() => handleClick(item)}
               >
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-blue-500/20 text-blue-400">
-                    GDELT
+                  <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                    item.provider === "Mediastack"
+                      ? "bg-purple-500/20 text-purple-400"
+                      : "bg-blue-500/20 text-blue-400"
+                  }`}>
+                    {item.provider || "GDELT"}
                   </span>
                   <span className="text-[10px] text-[var(--text-muted)] truncate max-w-[140px]">
                     {item.source}

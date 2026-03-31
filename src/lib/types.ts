@@ -11,6 +11,7 @@ export interface NewsItem {
   imageUrl?: string | null;
   sourceCountry?: string | null;
   language?: string | null;
+  provider?: string;
 }
 
 export interface Aircraft {

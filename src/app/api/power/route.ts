@@ -6,16 +6,18 @@ import { NextResponse } from "next/server";
 // blackouts, and electricity issues. This gives us real, sourced reports
 // rather than fabricated province-level data.
 //
-// We search for Spanish and English terms related to Cuban blackouts:
-// "apagón cuba", "blackout cuba", "electricity cuba", "UNE cuba"
+// We search for English-language terms related to Cuban blackouts:
+// "blackout cuba", "power outage cuba", "electricity crisis cuba"
+//
+// sourcelang:english restricts results to English articles only.
 //
 // Optionally, if CUBA_POWER_SCRAPER_URL is set, we also fetch from a
 // custom scraper that may provide structured province-level data.
 
 const GDELT_POWER_QUERIES = [
-  "https://api.gdeltproject.org/api/v2/doc/doc?query=%22apagon%22%20cuba&mode=artlist&format=json&maxrecords=10&sort=datedesc",
-  "https://api.gdeltproject.org/api/v2/doc/doc?query=%22blackout%22%20cuba%20electricity&mode=artlist&format=json&maxrecords=10&sort=datedesc",
-  "https://api.gdeltproject.org/api/v2/doc/doc?query=cuba%20%22power%20outage%22&mode=artlist&format=json&maxrecords=5&sort=datedesc",
+  "https://api.gdeltproject.org/api/v2/doc/doc?query=%22blackout%22%20cuba%20sourcelang:english&mode=artlist&format=json&maxrecords=10&sort=datedesc",
+  "https://api.gdeltproject.org/api/v2/doc/doc?query=cuba%20%22power%20outage%22%20sourcelang:english&mode=artlist&format=json&maxrecords=10&sort=datedesc",
+  "https://api.gdeltproject.org/api/v2/doc/doc?query=cuba%20%22electricity%20crisis%22%20sourcelang:english&mode=artlist&format=json&maxrecords=5&sort=datedesc",
 ];
 
 interface GdeltArticle {
