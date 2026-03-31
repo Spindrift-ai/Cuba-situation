@@ -147,7 +147,7 @@ export default function Dashboard() {
 
           {/* Data source attribution */}
           <div className="absolute top-2 left-2 md:top-3 md:left-3 bg-[var(--bg-panel)]/90 backdrop-blur border border-[var(--border)] rounded px-1.5 py-1 text-[7px] md:text-[8px] text-[var(--text-muted)] z-[1000]">
-            Air: OpenSky · Maritime: AISstream · Power: UNE scraper
+            Air: OpenSky · Maritime: AISstream · News: Google+GDELT
           </div>
         </div>
 

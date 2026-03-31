@@ -73,7 +73,7 @@ function MiniLineChart({
 
   return (
     <div className="h-24 mt-1">
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
         <LineChart data={sampled} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
           <XAxis

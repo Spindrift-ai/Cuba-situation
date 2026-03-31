@@ -64,13 +64,15 @@ export default function NewsFeed({ items, loading, error, fetchedAt, onSelect }:
               >
                 <div className="flex items-center gap-2 mb-1">
                   <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
-                    item.provider === "Mediastack"
-                      ? "bg-purple-500/20 text-purple-400"
-                      : item.provider === "GNews"
-                        ? "bg-green-500/20 text-green-400"
-                        : item.provider === "Currents"
-                          ? "bg-amber-500/20 text-amber-400"
-                          : "bg-blue-500/20 text-blue-400"
+                    item.provider === "Google News"
+                      ? "bg-sky-500/20 text-sky-400"
+                      : item.provider === "Mediastack"
+                        ? "bg-purple-500/20 text-purple-400"
+                        : item.provider === "GNews"
+                          ? "bg-green-500/20 text-green-400"
+                          : item.provider === "Currents"
+                            ? "bg-amber-500/20 text-amber-400"
+                            : "bg-blue-500/20 text-blue-400"
                   }`}>
                     {item.provider || "GDELT"}
                   </span>

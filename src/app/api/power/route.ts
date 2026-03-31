@@ -2,34 +2,20 @@ import { NextResponse } from "next/server";
 
 // Cuba's power grid has NO public API.
 //
-// Strategy: Use GDELT to find recent news articles about Cuban power outages,
-// blackouts, and electricity issues. This gives us real, sourced reports
-// rather than fabricated province-level data.
+// Strategy: Use Google News RSS + GDELT to find recent news about Cuban
+// power outages, blackouts, and electricity issues.
 //
-// sourcelang:english restricts results to English articles only.
-//
-// Optionally, if CUBA_POWER_SCRAPER_URL is set, we also fetch from a
-// custom scraper that may provide structured province-level data.
+// Google News RSS is fast and reliable (no auth needed).
+// GDELT is a bonus source (5s timeout — it's slow).
 
-const GDELT_POWER_QUERIES = [
-  "https://api.gdeltproject.org/api/v2/doc/doc?query=%22blackout%22%20cuba%20sourcelang:english&mode=ArtList&format=json&maxrecords=10&sort=datedesc",
-  "https://api.gdeltproject.org/api/v2/doc/doc?query=cuba%20%22power%20outage%22%20sourcelang:english&mode=ArtList&format=json&maxrecords=10&sort=datedesc",
-  "https://api.gdeltproject.org/api/v2/doc/doc?query=cuba%20%22electricity%20crisis%22%20sourcelang:english&mode=ArtList&format=json&maxrecords=5&sort=datedesc",
-  "https://api.gdeltproject.org/api/v2/doc/doc?query=cuba%20%22power%20grid%22%20sourcelang:english&mode=ArtList&format=json&maxrecords=5&sort=datedesc",
+const POWER_RSS_QUERIES = [
+  "https://news.google.com/rss/search?q=cuba+blackout&hl=en-US&gl=US&ceid=US:en",
+  "https://news.google.com/rss/search?q=cuba+power+outage&hl=en-US&gl=US&ceid=US:en",
+  "https://news.google.com/rss/search?q=cuba+electricity+crisis&hl=en-US&gl=US&ceid=US:en",
 ];
 
-interface GdeltArticle {
-  url: string;
-  title: string;
-  seendate: string;
-  domain: string;
-  language: string;
-  sourcecountry: string;
-}
-
-interface GdeltResponse {
-  articles?: GdeltArticle[];
-}
+const GDELT_POWER_URL =
+  "https://api.gdeltproject.org/api/v2/doc/doc?query=(%22blackout%22%20OR%20%22power%20outage%22%20OR%20%22electricity%22)%20cuba%20sourcelang:english&mode=ArtList&format=json&maxrecords=10&sort=datedesc";
 
 interface PowerReport {
   id: string;
@@ -38,12 +24,82 @@ interface PowerReport {
   url: string;
   timestamp: string;
   language: string | null;
+  provider: string;
+}
+
+async function fetchWithTimeout(
+  url: string,
+  opts: RequestInit = {},
+  timeoutMs = 6000
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...opts, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function extractTag(xml: string, tag: string): string {
+  const cdataRegex = new RegExp(
+    `<${tag}[^>]*>\\s*<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>\\s*</${tag}>`,
+    "i"
+  );
+  const cdataMatch = xml.match(cdataRegex);
+  if (cdataMatch) return cdataMatch[1].trim();
+
+  const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "i");
+  const match = xml.match(regex);
+  return match ? match[1].trim() : "";
+}
+
+function decodeHtmlEntities(str: string): string {
+  return str
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/g, "'");
+}
+
+function parseRssItems(
+  xml: string
+): Array<{ title: string; link: string; pubDate: string; source: string }> {
+  const items: Array<{
+    title: string;
+    link: string;
+    pubDate: string;
+    source: string;
+  }> = [];
+
+  const chunks = xml.split("<item>").slice(1);
+  for (const chunk of chunks) {
+    const endIdx = chunk.indexOf("</item>");
+    if (endIdx === -1) continue;
+    const itemXml = chunk.substring(0, endIdx);
+
+    const title = extractTag(itemXml, "title");
+    const link = extractTag(itemXml, "link");
+    const pubDate = extractTag(itemXml, "pubDate");
+    const source = extractTag(itemXml, "source");
+
+    if (title && link) {
+      items.push({
+        title: decodeHtmlEntities(title),
+        link,
+        pubDate: pubDate || "",
+        source: source ? decodeHtmlEntities(source) : "",
+      });
+    }
+  }
+  return items;
 }
 
 function parseGdeltDate(dateStr: string): string {
   if (!dateStr) return new Date().toISOString();
   try {
-    // GDELT format: YYYYMMDDTHHMMSS or YYYYMMDDHHMMSS
     const clean = dateStr.replace("T", "");
     const y = clean.substring(0, 4);
     const m = clean.substring(4, 6);
@@ -59,70 +115,107 @@ function parseGdeltDate(dateStr: string): string {
   }
 }
 
-async function fetchWithTimeout(
-  url: string,
-  opts: RequestInit = {},
-  timeoutMs = 8000
-): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...opts, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 export async function GET() {
   const scraperUrl = process.env.CUBA_POWER_SCRAPER_URL;
   const reports: PowerReport[] = [];
   const seenUrls = new Set<string>();
   const diagnostics: Record<string, string> = {};
 
-  // 1. Fetch GDELT power outage reports (always — no key needed)
-  const queryResults: string[] = [];
-
-  const fetches = GDELT_POWER_QUERIES.map(async (url, idx) => {
-    try {
-      const res = await fetchWithTimeout(url, {
-        headers: { "User-Agent": "CubaDashboard/1.0" },
-      });
-      if (!res.ok) {
-        queryResults[idx] = `HTTP ${res.status}`;
-        return [];
-      }
-      const text = await res.text();
-      try {
-        const data: GdeltResponse = JSON.parse(text);
-        const articles = data.articles || [];
-        queryResults[idx] = `OK — ${articles.length} articles`;
-        return articles;
-      } catch {
-        queryResults[idx] = `Non-JSON response: ${text.substring(0, 100)}`;
-        return [];
-      }
-    } catch (err) {
-      queryResults[idx] = `Network error: ${String(err).substring(0, 150)}`;
-      return [];
-    }
-  });
-
-  const results = await Promise.all(fetches);
-
-  for (const articles of results) {
-    for (const a of articles) {
-      if (!a.url || seenUrls.has(a.url)) continue;
-      seenUrls.add(a.url);
-      reports.push({
-        id: `pwr-${reports.length}`,
-        title: a.title || "Untitled",
-        source: a.domain || "Unknown",
-        url: a.url,
-        timestamp: parseGdeltDate(a.seendate),
-        language: a.language || null,
-      });
-    }
+  function addReport(r: PowerReport) {
+    if (seenUrls.has(r.url)) return;
+    seenUrls.add(r.url);
+    reports.push(r);
   }
+
+  const fetches: Promise<void>[] = [];
+
+  // ── 1. Google News RSS (fast, reliable) ───────────────────────────────────
+  fetches.push(
+    (async () => {
+      let total = 0;
+      const errors: string[] = [];
+
+      for (const rssUrl of POWER_RSS_QUERIES) {
+        try {
+          const res = await fetchWithTimeout(rssUrl, {
+            headers: {
+              "User-Agent": "CubaDashboard/1.0",
+              Accept: "application/rss+xml, application/xml, text/xml",
+            },
+          });
+          if (!res.ok) {
+            errors.push(`HTTP ${res.status}`);
+            continue;
+          }
+          const xml = await res.text();
+          const rssItems = parseRssItems(xml);
+          total += rssItems.length;
+
+          for (const item of rssItems) {
+            addReport({
+              id: `pwr-gn-${reports.length}`,
+              title: item.title,
+              source: item.source || "Google News",
+              url: item.link,
+              timestamp: item.pubDate
+                ? new Date(item.pubDate).toISOString()
+                : new Date().toISOString(),
+              language: "English",
+              provider: "Google News",
+            });
+          }
+        } catch (err) {
+          errors.push(String(err).substring(0, 80));
+        }
+      }
+
+      diagnostics.google_news =
+        errors.length > 0 && total === 0
+          ? `Error: ${errors.join("; ")}`
+          : `OK — ${total} articles`;
+    })()
+  );
+
+  // ── 2. GDELT (bonus — 5s timeout) ────────────────────────────────────────
+  fetches.push(
+    (async () => {
+      try {
+        const res = await fetchWithTimeout(
+          GDELT_POWER_URL,
+          { headers: { "User-Agent": "CubaDashboard/1.0" } },
+          5000
+        );
+        if (!res.ok) {
+          diagnostics.gdelt = `HTTP ${res.status}`;
+          return;
+        }
+        const text = await res.text();
+        try {
+          const data = JSON.parse(text);
+          const articles = data.articles || [];
+          for (const a of articles) {
+            if (!a.url) continue;
+            addReport({
+              id: `pwr-gdelt-${reports.length}`,
+              title: a.title || "Untitled",
+              source: a.domain || "Unknown",
+              url: a.url,
+              timestamp: parseGdeltDate(a.seendate),
+              language: a.language || null,
+              provider: "GDELT",
+            });
+          }
+          diagnostics.gdelt = `OK — ${articles.length} articles`;
+        } catch {
+          diagnostics.gdelt = `Non-JSON: ${text.substring(0, 80)}`;
+        }
+      } catch (err) {
+        diagnostics.gdelt = `Timeout/Error: ${String(err).substring(0, 100)}`;
+      }
+    })()
+  );
+
+  await Promise.all(fetches);
 
   // Sort by timestamp descending
   reports.sort(
@@ -130,10 +223,9 @@ export async function GET() {
       new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   );
 
-  diagnostics.gdelt_queries = queryResults.join(" | ");
   diagnostics.total_reports = String(reports.length);
 
-  // 2. If custom scraper is configured, also fetch structured province data
+  // 3. Custom scraper (if configured)
   let provinces: unknown[] = [];
   let scraperError: string | null = null;
 
@@ -150,7 +242,7 @@ export async function GET() {
       }
     } catch (err) {
       scraperError = String(err);
-      diagnostics.scraper = `Error: ${scraperError.substring(0, 200)}`;
+      diagnostics.scraper = `Error: ${scraperError.substring(0, 150)}`;
     }
   } else {
     diagnostics.scraper = "Not configured (CUBA_POWER_SCRAPER_URL)";
@@ -164,8 +256,6 @@ export async function GET() {
     configRequired: false,
     diagnostics,
     fetchedAt: new Date().toISOString(),
-    source:
-      "GDELT Project (power outage news)" +
-      (scraperUrl ? " + custom scraper" : ""),
+    source: "Google News RSS + GDELT" + (scraperUrl ? " + custom scraper" : ""),
   });
 }
