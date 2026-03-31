@@ -70,7 +70,7 @@ export default function TrafficPanel({
           {aircraftLoading && <LoadingState />}
           {!aircraftLoading && aircraftError && <ErrorState message={aircraftError} />}
           {!aircraftLoading && !aircraftError && aircraft.length === 0 && (
-            <EmptyState message="No aircraft detected in Cuba airspace. OpenSky coverage may be limited in this region." />
+            <EmptyState message="No aircraft detected in Cuba airspace. OpenSky has limited Caribbean coverage. Add AIRLABS_API_KEY for better results." />
           )}
 
           <div className="space-y-1.5">

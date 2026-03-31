@@ -45,7 +45,7 @@ export default function NewsFeed({ items, loading, error, fetchedAt, onSelect }:
       {loading && <LoadingState />}
       {!loading && error && <ErrorState message={error} />}
       {!loading && !error && items.length === 0 && (
-        <EmptyState message="No Cuba-related news found from GDELT at this time." />
+        <EmptyState message="No Cuba-related news found. Visit /debug to check API diagnostics." />
       )}
 
       {!loading && items.length > 0 && (
@@ -66,7 +66,11 @@ export default function NewsFeed({ items, loading, error, fetchedAt, onSelect }:
                   <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
                     item.provider === "Mediastack"
                       ? "bg-purple-500/20 text-purple-400"
-                      : "bg-blue-500/20 text-blue-400"
+                      : item.provider === "GNews"
+                        ? "bg-green-500/20 text-green-400"
+                        : item.provider === "Currents"
+                          ? "bg-amber-500/20 text-amber-400"
+                          : "bg-blue-500/20 text-blue-400"
                   }`}>
                     {item.provider || "GDELT"}
                   </span>

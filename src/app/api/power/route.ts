@@ -6,18 +6,16 @@ import { NextResponse } from "next/server";
 // blackouts, and electricity issues. This gives us real, sourced reports
 // rather than fabricated province-level data.
 //
-// We search for English-language terms related to Cuban blackouts:
-// "blackout cuba", "power outage cuba", "electricity crisis cuba"
-//
 // sourcelang:english restricts results to English articles only.
 //
 // Optionally, if CUBA_POWER_SCRAPER_URL is set, we also fetch from a
 // custom scraper that may provide structured province-level data.
 
 const GDELT_POWER_QUERIES = [
-  "https://api.gdeltproject.org/api/v2/doc/doc?query=%22blackout%22%20cuba%20sourcelang:english&mode=artlist&format=json&maxrecords=10&sort=datedesc",
-  "https://api.gdeltproject.org/api/v2/doc/doc?query=cuba%20%22power%20outage%22%20sourcelang:english&mode=artlist&format=json&maxrecords=10&sort=datedesc",
-  "https://api.gdeltproject.org/api/v2/doc/doc?query=cuba%20%22electricity%20crisis%22%20sourcelang:english&mode=artlist&format=json&maxrecords=5&sort=datedesc",
+  "https://api.gdeltproject.org/api/v2/doc/doc?query=%22blackout%22%20cuba%20sourcelang:english&mode=ArtList&format=json&maxrecords=10&sort=datedesc",
+  "https://api.gdeltproject.org/api/v2/doc/doc?query=cuba%20%22power%20outage%22%20sourcelang:english&mode=ArtList&format=json&maxrecords=10&sort=datedesc",
+  "https://api.gdeltproject.org/api/v2/doc/doc?query=cuba%20%22electricity%20crisis%22%20sourcelang:english&mode=ArtList&format=json&maxrecords=5&sort=datedesc",
+  "https://api.gdeltproject.org/api/v2/doc/doc?query=cuba%20%22power%20grid%22%20sourcelang:english&mode=ArtList&format=json&maxrecords=5&sort=datedesc",
 ];
 
 interface GdeltArticle {
@@ -27,6 +25,10 @@ interface GdeltArticle {
   domain: string;
   language: string;
   sourcecountry: string;
+}
+
+interface GdeltResponse {
+  articles?: GdeltArticle[];
 }
 
 interface PowerReport {
@@ -41,15 +43,33 @@ interface PowerReport {
 function parseGdeltDate(dateStr: string): string {
   if (!dateStr) return new Date().toISOString();
   try {
-    const y = dateStr.substring(0, 4);
-    const m = dateStr.substring(4, 6);
-    const d = dateStr.substring(6, 8);
-    const h = dateStr.substring(9, 11) || "00";
-    const min = dateStr.substring(11, 13) || "00";
-    const s = dateStr.substring(13, 15) || "00";
-    return new Date(`${y}-${m}-${d}T${h}:${min}:${s}Z`).toISOString();
+    // GDELT format: YYYYMMDDTHHMMSS or YYYYMMDDHHMMSS
+    const clean = dateStr.replace("T", "");
+    const y = clean.substring(0, 4);
+    const m = clean.substring(4, 6);
+    const d = clean.substring(6, 8);
+    const h = clean.substring(8, 10) || "00";
+    const min = clean.substring(10, 12) || "00";
+    const s = clean.substring(12, 14) || "00";
+    const date = new Date(`${y}-${m}-${d}T${h}:${min}:${s}Z`);
+    if (isNaN(date.getTime())) return new Date().toISOString();
+    return date.toISOString();
   } catch {
     return new Date().toISOString();
+  }
+}
+
+async function fetchWithTimeout(
+  url: string,
+  opts: RequestInit = {},
+  timeoutMs = 8000
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...opts, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -57,42 +77,61 @@ export async function GET() {
   const scraperUrl = process.env.CUBA_POWER_SCRAPER_URL;
   const reports: PowerReport[] = [];
   const seenUrls = new Set<string>();
+  const diagnostics: Record<string, string> = {};
 
   // 1. Fetch GDELT power outage reports (always — no key needed)
-  try {
-    const fetches = GDELT_POWER_QUERIES.map((url) =>
-      fetch(url, {
-        next: { revalidate: 0 },
+  const queryResults: string[] = [];
+
+  const fetches = GDELT_POWER_QUERIES.map(async (url, idx) => {
+    try {
+      const res = await fetchWithTimeout(url, {
         headers: { "User-Agent": "CubaDashboard/1.0" },
-      })
-        .then((res) => (res.ok ? res.json() : { articles: [] }))
-        .catch(() => ({ articles: [] }))
-    );
-
-    const results = await Promise.all(fetches);
-
-    for (const data of results) {
-      for (const a of data.articles || []) {
-        if (seenUrls.has(a.url)) continue;
-        seenUrls.add(a.url);
-        reports.push({
-          id: `pwr-${reports.length}`,
-          title: a.title || "Untitled",
-          source: a.domain || "Unknown",
-          url: a.url,
-          timestamp: parseGdeltDate(a.seendate),
-          language: a.language || null,
-        });
+      });
+      if (!res.ok) {
+        queryResults[idx] = `HTTP ${res.status}`;
+        return [];
       }
+      const text = await res.text();
+      try {
+        const data: GdeltResponse = JSON.parse(text);
+        const articles = data.articles || [];
+        queryResults[idx] = `OK — ${articles.length} articles`;
+        return articles;
+      } catch {
+        queryResults[idx] = `Non-JSON response: ${text.substring(0, 100)}`;
+        return [];
+      }
+    } catch (err) {
+      queryResults[idx] = `Network error: ${String(err).substring(0, 150)}`;
+      return [];
     }
+  });
 
-    // Sort by timestamp descending
-    reports.sort(
-      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-    );
-  } catch {
-    // GDELT fetch failed — continue with empty reports
+  const results = await Promise.all(fetches);
+
+  for (const articles of results) {
+    for (const a of articles) {
+      if (!a.url || seenUrls.has(a.url)) continue;
+      seenUrls.add(a.url);
+      reports.push({
+        id: `pwr-${reports.length}`,
+        title: a.title || "Untitled",
+        source: a.domain || "Unknown",
+        url: a.url,
+        timestamp: parseGdeltDate(a.seendate),
+        language: a.language || null,
+      });
+    }
   }
+
+  // Sort by timestamp descending
+  reports.sort(
+    (a, b) =>
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
+
+  diagnostics.gdelt_queries = queryResults.join(" | ");
+  diagnostics.total_reports = String(reports.length);
 
   // 2. If custom scraper is configured, also fetch structured province data
   let provinces: unknown[] = [];
@@ -100,27 +139,33 @@ export async function GET() {
 
   if (scraperUrl) {
     try {
-      const res = await fetch(scraperUrl, { next: { revalidate: 0 } });
+      const res = await fetchWithTimeout(scraperUrl);
       if (res.ok) {
         const data = await res.json();
         provinces = data.provinces || data || [];
+        diagnostics.scraper = `OK — ${Array.isArray(provinces) ? provinces.length : 0} provinces`;
       } else {
         scraperError = `Scraper returned ${res.status}`;
+        diagnostics.scraper = scraperError;
       }
     } catch (err) {
       scraperError = String(err);
+      diagnostics.scraper = `Error: ${scraperError.substring(0, 200)}`;
     }
+  } else {
+    diagnostics.scraper = "Not configured (CUBA_POWER_SCRAPER_URL)";
   }
 
   return NextResponse.json({
-    // News reports about power outages (always available via GDELT)
     reports,
-    // Structured province data (only if scraper is configured)
     provinces,
     scraperConfigured: !!scraperUrl,
     scraperError,
-    configRequired: false, // We always have GDELT reports as fallback
+    configRequired: false,
+    diagnostics,
     fetchedAt: new Date().toISOString(),
-    source: "GDELT Project (power outage news)" + (scraperUrl ? " + custom scraper" : ""),
+    source:
+      "GDELT Project (power outage news)" +
+      (scraperUrl ? " + custom scraper" : ""),
   });
 }
