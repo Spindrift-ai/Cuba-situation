@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 
 // OpenSky Network REST API — free, no auth required for anonymous access
 // https://openskynetwork.github.io/opensky-api/rest.html
-// Bounding box covers Cuba and surrounding waters
+// Bounding box covers 200 NM (nautical miles) from Cuba's coastline.
+// Cuba spans ~19.8-23.2N, ~84.9-74.1W. 200NM ≈ 3.34° latitude.
 const OPENSKY_URL =
-  "https://opensky-network.org/api/states/all?lamin=19.5&lomin=-85.5&lamax=25.0&lomax=-74.0";
+  "https://opensky-network.org/api/states/all?lamin=16.5&lomin=-88.5&lamax=26.5&lomax=-70.5";
 
 // State vector indices from OpenSky docs:
 // 0: icao24, 1: callsign, 2: origin_country, 3: time_position,

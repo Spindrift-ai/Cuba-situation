@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 
-// Polymarket Gamma API — free, no auth required
-// https://docs.polymarket.com/
+// Polymarket Gamma API + CLOB API — free, no auth required
 //
-// Fetch specific Cuba geopolitics events by their known slugs.
+// 1. Fetch specific Cuba events from Gamma API by slug
+// 2. For each market, fetch price history from CLOB API using the condition_id
 
 const GAMMA_EVENTS_URL = "https://gamma-api.polymarket.com/events";
+const CLOB_PRICES_URL = "https://clob.polymarket.com/prices-history";
 
 // Exact event slugs from Polymarket to track
 const TRACKED_EVENT_SLUGS = [
@@ -35,6 +36,7 @@ interface GammaMarket {
   description: string;
   image: string;
   groupItemTitle: string;
+  clobTokenIds: string; // JSON array like "[\"token1\",\"token2\"]"
 }
 
 interface GammaEvent {
@@ -52,10 +54,40 @@ interface GammaEvent {
   volume: number;
 }
 
+interface PricePoint {
+  t: number; // unix timestamp
+  p: number; // price 0-1
+}
+
+async function fetchPriceHistory(
+  tokenId: string
+): Promise<Array<{ timestamp: number; probability: number }>> {
+  try {
+    const url = `${CLOB_PRICES_URL}?market=${tokenId}&interval=all&fidelity=60`;
+    const res = await fetch(url, {
+      next: { revalidate: 0 },
+      headers: { "User-Agent": "CubaDashboard/1.0" },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+
+    // CLOB returns { history: [{ t, p }] }
+    const history: PricePoint[] = data.history || data || [];
+    if (!Array.isArray(history)) return [];
+
+    return history.map((pt) => ({
+      timestamp: pt.t * 1000, // convert to ms
+      probability: Math.round(pt.p * 100),
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export async function GET() {
   try {
-    // Fetch each tracked event by slug in parallel
-    const fetches = TRACKED_EVENT_SLUGS.map((slug) =>
+    // 1. Fetch each tracked event by slug in parallel
+    const eventFetches = TRACKED_EVENT_SLUGS.map((slug) =>
       fetch(`${GAMMA_EVENTS_URL}?slug=${slug}`, {
         next: { revalidate: 0 },
         headers: { "User-Agent": "CubaDashboard/1.0" },
@@ -64,8 +96,9 @@ export async function GET() {
         .catch(() => [])
     );
 
-    const results = await Promise.all(fetches);
+    const eventResults = await Promise.all(eventFetches);
 
+    // 2. Collect all markets
     const allMarkets: Array<{
       id: string;
       question: string;
@@ -80,11 +113,15 @@ export async function GET() {
       description: string;
       url: string;
       groupItemTitle: string;
+      conditionId: string;
+      clobTokenId: string | null;
+      priceHistory: Array<{ timestamp: number; probability: number }>;
     }> = [];
 
     const seenIds = new Set<string>();
+    const tokenIds: Array<{ marketIdx: number; tokenId: string }> = [];
 
-    for (const data of results) {
+    for (const data of eventResults) {
       const events: GammaEvent[] = Array.isArray(data) ? data : [];
       for (const event of events) {
         for (const m of event.markets || []) {
@@ -99,6 +136,18 @@ export async function GET() {
             // ignore
           }
 
+          // Extract the first CLOB token ID (Yes outcome) for price history
+          let clobTokenId: string | null = null;
+          try {
+            const tokens = JSON.parse(m.clobTokenIds);
+            if (Array.isArray(tokens) && tokens.length > 0) {
+              clobTokenId = tokens[0];
+            }
+          } catch {
+            // ignore
+          }
+
+          const idx = allMarkets.length;
           allMarkets.push({
             id: m.id,
             question: m.question,
@@ -113,8 +162,31 @@ export async function GET() {
             description: m.description || event.description,
             url: `https://polymarket.com/event/${event.slug}`,
             groupItemTitle: m.groupItemTitle || "",
+            conditionId: m.conditionId,
+            clobTokenId,
+            priceHistory: [],
           });
+
+          if (clobTokenId) {
+            tokenIds.push({ marketIdx: idx, tokenId: clobTokenId });
+          }
         }
+      }
+    }
+
+    // 3. Fetch price history for all markets in parallel
+    const historyFetches = tokenIds.map(({ marketIdx, tokenId }) =>
+      fetchPriceHistory(tokenId).then((history) => ({
+        marketIdx,
+        history,
+      }))
+    );
+
+    const historyResults = await Promise.all(historyFetches);
+
+    for (const { marketIdx, history } of historyResults) {
+      if (allMarkets[marketIdx]) {
+        allMarkets[marketIdx].priceHistory = history;
       }
     }
 

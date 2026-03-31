@@ -66,6 +66,9 @@ export interface PolymarketMarket {
   description: string;
   url: string;
   groupItemTitle: string;
+  conditionId: string;
+  clobTokenId: string | null;
+  priceHistory: Array<{ timestamp: number; probability: number }>;
 }
 
 export interface PolymarketEvent {
