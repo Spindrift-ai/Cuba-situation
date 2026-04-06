@@ -206,6 +206,7 @@ export default function Dashboard() {
                 fetchedAt={powerFeed.fetchedAt}
                 scraperConfigured={powerFeed.data?.scraperConfigured || false}
                 source={powerFeed.data?.source}
+                aiEnabled={powerFeed.data?.aiEnabled}
               />
             </div>
             <div className={activeTab === "polymarket" ? "h-full" : "hidden"}>

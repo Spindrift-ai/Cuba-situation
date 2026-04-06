@@ -13,6 +13,12 @@ function timeAgo(timestamp: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+const RELEVANCE_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  outage: { bg: "bg-red-500/20", text: "text-red-400", label: "OUTAGE" },
+  infrastructure: { bg: "bg-amber-500/20", text: "text-amber-400", label: "INFRA" },
+  policy: { bg: "bg-blue-500/20", text: "text-blue-400", label: "POLICY" },
+};
+
 interface PowerPanelProps {
   reports: PowerReport[];
   provinces: ProvinceStatus[];
@@ -21,6 +27,7 @@ interface PowerPanelProps {
   fetchedAt: string | null;
   scraperConfigured: boolean;
   source?: string;
+  aiEnabled?: boolean;
 }
 
 export default function PowerPanel({
@@ -31,6 +38,7 @@ export default function PowerPanel({
   fetchedAt,
   scraperConfigured,
   source,
+  aiEnabled,
 }: PowerPanelProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -42,6 +50,9 @@ export default function PowerPanel({
   const blackoutCount = provinces.filter((p) => p.status === "blackout").length;
   const partialCount = provinces.filter((p) => p.status === "partial").length;
 
+  // Count by relevance
+  const outageCount = reports.filter((r) => r.relevance === "outage").length;
+
   return (
     <div className="panel h-full flex flex-col">
       <div className="panel-header">
@@ -51,7 +62,7 @@ export default function PowerPanel({
           <FetchTimestamp fetchedAt={fetchedAt} />
           {hasReports && (
             <span className="text-[var(--text-muted)] text-[10px] font-normal normal-case tracking-normal">
-              {reports.length} reports
+              {reports.length} reports{outageCount > 0 ? ` (${outageCount} outage)` : ""}
             </span>
           )}
         </span>
@@ -62,8 +73,13 @@ export default function PowerPanel({
 
         {/* Source attribution */}
         {!loading && source && (
-          <div className="text-[9px] text-[var(--text-muted)] mb-2 px-1">
+          <div className="text-[9px] text-[var(--text-muted)] mb-2 px-1 flex items-center gap-1.5">
             Source: {source}
+            {aiEnabled && (
+              <span className="inline-block px-1 py-0.5 rounded bg-purple-500/15 text-purple-400 text-[8px] font-bold">
+                AI FILTERED
+              </span>
+            )}
           </div>
         )}
 
@@ -144,15 +160,17 @@ export default function PowerPanel({
           </div>
         )}
 
-        {/* GDELT power outage news reports (always available) */}
+        {/* Power outage news reports */}
         {!loading && hasReports && (
           <div>
             <div className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-2">
-              Outage Reports from News Sources
+              {aiEnabled ? "AI-Filtered Outage Reports" : "Outage Reports from News Sources"}
             </div>
             <div className="space-y-1.5">
               {reports.map((r) => {
                 const isExpanded = expandedId === r.id;
+                const style = RELEVANCE_STYLES[r.relevance || "infrastructure"] || RELEVANCE_STYLES.infrastructure;
+
                 return (
                   <div
                     key={r.id}
@@ -164,8 +182,10 @@ export default function PowerPanel({
                     onClick={() => setExpandedId(isExpanded ? null : r.id)}
                   >
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-red-500/20 text-red-400">
-                        OUTAGE
+                      <span
+                        className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${style.bg} ${style.text}`}
+                      >
+                        {style.label}
                       </span>
                       <span className="text-[10px] text-[var(--text-muted)] truncate max-w-[140px]">
                         {r.source}
@@ -186,6 +206,13 @@ export default function PowerPanel({
                     <div className="text-[12px] font-medium leading-tight text-[var(--text-primary)]">
                       {r.title}
                     </div>
+
+                    {/* AI summary line */}
+                    {r.aiSummary && (
+                      <div className="text-[10px] text-purple-300/80 mt-1 italic">
+                        {r.aiSummary}
+                      </div>
+                    )}
 
                     {isExpanded && (
                       <div className="mt-2 pt-2 border-t border-[var(--border)] flex items-center gap-3">

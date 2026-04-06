@@ -112,6 +112,10 @@ export interface PowerReport {
   url: string;
   timestamp: string;
   language: string | null;
+  /** AI classification: "outage" | "infrastructure" | "policy" | "unrelated" */
+  relevance?: "outage" | "infrastructure" | "policy" | "unrelated";
+  /** Short AI-generated summary of why this article matters */
+  aiSummary?: string;
 }
 
 export interface PowerResponse {
