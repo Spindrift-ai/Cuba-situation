@@ -50,26 +50,46 @@ body {
   background: var(--text-muted);
 }
 
-/* Leaflet overrides for dark mode */
-.leaflet-container {
-  background: #0a0e17 !important;
+/* MapLibre GL overrides for dark theme */
+.maplibregl-popup-content {
+  background: #151d2e !important;
+  border: 1px solid #334155 !important;
+  border-radius: 8px !important;
+  padding: 10px !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5) !important;
 }
-.leaflet-tile-pane {
-  filter: brightness(0.7) contrast(1.2) saturate(0.3) hue-rotate(180deg)
-    invert(1);
+.maplibregl-popup-tip {
+  border-top-color: #151d2e !important;
 }
-.leaflet-control-zoom a {
-  background: var(--bg-panel) !important;
-  color: var(--text-primary) !important;
-  border-color: var(--border) !important;
+.maplibregl-popup-close-button {
+  color: #94a3b8 !important;
+  font-size: 16px !important;
+  padding: 2px 6px !important;
 }
-.leaflet-control-attribution {
-  background: rgba(10, 14, 23, 0.8) !important;
-  color: var(--text-muted) !important;
+.maplibregl-popup-close-button:hover {
+  color: #e2e8f0 !important;
+  background: transparent !important;
+}
+.maplibregl-ctrl-attrib {
+  background: rgba(10, 14, 23, 0.7) !important;
   font-size: 9px !important;
 }
-.leaflet-control-attribution a {
+.maplibregl-ctrl-attrib a {
   color: var(--text-muted) !important;
+}
+.maplibregl-ctrl-group {
+  background: var(--bg-panel) !important;
+  border-color: var(--border) !important;
+}
+.maplibregl-ctrl-group button {
+  background-color: var(--bg-panel) !important;
+  border-color: var(--border) !important;
+}
+.maplibregl-ctrl-group button + button {
+  border-top-color: var(--border) !important;
+}
+.maplibregl-ctrl-group button span {
+  filter: invert(0.7);
 }
 
 /* Pulse animation for live indicators */

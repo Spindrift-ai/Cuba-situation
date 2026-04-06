@@ -127,6 +127,7 @@ export interface PowerResponse {
   error?: string;
   fetchedAt: string;
   source?: string;
+  aiEnabled?: boolean;
 }
 
 export interface PolymarketResponse {

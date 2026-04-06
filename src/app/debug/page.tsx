@@ -120,10 +120,10 @@ function ApiCard({
 }
 
 const API_ENDPOINTS = [
-  { name: "News (GDELT + Mediastack + GNews + Currents)", path: "/api/news", countKey: "items" },
+  { name: "News (Google News + GDELT + more)", path: "/api/news", countKey: "items" },
   { name: "Aircraft (OpenSky + AirLabs)", path: "/api/aircraft", countKey: "aircraft" },
   { name: "Maritime (AISstream)", path: "/api/maritime", countKey: "vessels" },
-  { name: "Power Outages (GDELT)", path: "/api/power", countKey: "reports" },
+  { name: "Power (Google News + GDELT, AI-filtered)", path: "/api/power", countKey: "reports" },
   { name: "Polymarket (Gamma + CLOB)", path: "/api/polymarket", countKey: "markets" },
 ];
 

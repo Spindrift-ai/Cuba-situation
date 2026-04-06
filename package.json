@@ -16,6 +16,7 @@
     "@types/react": "^19.2.14",
     "eruda": "^3.4.3",
     "leaflet": "^1.9.4",
+    "maplibre-gl": "^5.22.0",
     "next": "^16.2.1",
     "postcss": "^8.5.8",
     "react": "^19.2.4",
